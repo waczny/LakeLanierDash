@@ -274,6 +274,15 @@ void drawMainUI(){
   tft.setTextColor(C_DIM, 0x0002);
   tft.drawString(lk.updated, 312, 13, 2);
 
+  // Wifi status indicator: simple wifi icon in upper right if not connected
+  if (WiFi.status() != WL_CONNECTED) {
+    int wx = 300, wy = 10;
+    tft.drawCircle(wx, wy + 8, 6, C_RED);
+    tft.drawCircle(wx, wy + 8, 4, C_RED);
+    tft.drawLine(wx, wy + 14, wx, wy + 10, C_RED);
+    tft.drawLine(wx-2, wy + 10, wx+2, wy + 10, C_RED);
+  }
+
   // ── Metric cards now ABOVE the water level ─────────────────
   const int CY=32, CW=98, CH=54, CG=7;
   const int CX1=7, CX2=CX1+CW+CG, CX3=CX2+CW+CG;
@@ -1680,7 +1689,9 @@ void loop(){
 
   if(WiFi.status()!=WL_CONNECTED){
     // Try reconnect quietly
-    WiFi.reconnect(); delay(3000); return;
+    WiFi.reconnect(); delay(3000); 
+    drawMainUI();
+    return;
   }
 
   unsigned long now=millis();
