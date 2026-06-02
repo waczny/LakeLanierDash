@@ -28,7 +28,7 @@ response = client.chat.completions.create(
         {
             "role": "system",
             "content": (
-                "You are editing an ESP32 / Arduino / PlatformIO dashboard project. "
+                "You are editing an ESP32 / Arduino dashboard project. "
                 "Keep existing behavior unless the prompt requires a change. "
                 "Return ONLY the complete updated source file. "
                 "No markdown. No explanation."

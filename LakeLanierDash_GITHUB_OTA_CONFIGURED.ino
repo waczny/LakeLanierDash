@@ -283,6 +283,16 @@ void drawMainUI(){
     tft.drawLine(wx-2, wy + 10, wx+2, wy + 10, C_RED);
   }
 
+  // Add OTA update indicator in bottom right if update available
+  static bool otaUpdateAvailable = false;
+  static String otaLatestVersion = "";
+  if(otaUpdateAvailable) {
+    tft.setTextDatum(BR_DATUM);
+    tft.setTextColor(C_ACCENT, C_BG);
+    String s = "OTA: v" + otaLatestVersion;
+    tft.drawString(s.c_str(), 319, 239, 2);
+  }
+
   // ── Metric cards now ABOVE the water level ─────────────────
   const int CY=32, CW=98, CH=54, CG=7;
   const int CX1=7, CX2=CX1+CW+CG, CX3=CX2+CW+CG;
@@ -801,10 +811,18 @@ void handleTouch(){
     // ── MAIN SCREEN ──────────────────────────────────────────
     if(curScreen == SCR_MAIN){
       // Tap bottom-right corner (x>230, y>190) → open WiFi setup
+      // If OTA update available, tap bottom-right also triggers update
+      static bool otaUpdateAvailable = false;
+      static String otaLatestVersion = "";
       if(tx > 230 && ty > 190){
-        curScreen = SCR_WIFI;
-        scanNetworks();
-        drawWifiScreen();
+        if(otaUpdateAvailable){
+          // Confirm update tap area drawn in this zone
+          checkForOtaUpdate(true);
+        } else {
+          curScreen = SCR_WIFI;
+          scanNetworks();
+          drawWifiScreen();
+        }
       }
     }
 
@@ -1508,6 +1526,10 @@ bool isNewerVersion(const String& latest, const String& current){
   return false;
 }
 
+// These variables track OTA state for main UI indicator and touch handler.
+bool otaUpdateAvailable = false;
+String otaLatestVersion = "";
+
 String getLatestFirmwareVersion(){
   WiFiClientSecure client;
   client.setInsecure();
@@ -1594,6 +1616,7 @@ bool downloadAndInstallFirmware(const char* url){
   return ok;
 }
 
+// Sets global OTA tracking variables and triggers indicator/UI as needed.
 void checkForOtaUpdate(bool showScreen){
   if(WiFi.status() != WL_CONNECTED) return;
 
@@ -1601,12 +1624,24 @@ void checkForOtaUpdate(bool showScreen){
   String latest = getLatestFirmwareVersion();
   if(latest.length() == 0){
     Serial.println("OTA: version unavailable");
+    otaUpdateAvailable = false;
+    otaLatestVersion = "";
+    if(showScreen) drawMainUI();
     return;
   }
 
   Serial.printf("OTA latest version: %s\n", latest.c_str());
-  if(!isNewerVersion(latest, FW_VERSION)){
+  if(isNewerVersion(latest, FW_VERSION)){
+    otaUpdateAvailable = true;
+    otaLatestVersion = latest;
+  } else {
+    otaUpdateAvailable = false;
+    otaLatestVersion = "";
+  }
+
+  if(!otaUpdateAvailable){
     Serial.println("OTA: already up to date");
+    if(showScreen) drawMainUI();
     return;
   }
 
@@ -1699,6 +1734,14 @@ void loop(){
   if(now - lastOtaCheck >= OTA_CHECK_MS){
     lastOtaCheck = now;
     checkForOtaUpdate(true);
+    drawMainUI();
+  } else {
+    // If OTA status changed, update indicator
+    static bool previousOtaUpdateAvailable = false;
+    if(previousOtaUpdateAvailable != otaUpdateAvailable) {
+      previousOtaUpdateAvailable = otaUpdateAvailable;
+      drawMainUI();
+    }
   }
 
   // Surfer animation disabled for the premium dashboard layout.
