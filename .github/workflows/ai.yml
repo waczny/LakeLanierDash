@@ -69,7 +69,7 @@ jobs:
                   {
                       "role": "system",
                       "content": (
-                          "You are editing an ESP32 / Arduino / PlatformIO dashboard project. "
+                          "You are editing an ESP32 / Arduino dashboard project. "
                           "Keep existing behavior unless the prompt requires a change. "
                           "Return ONLY the complete updated source file. "
                           "No markdown. No explanation."
@@ -103,7 +103,7 @@ jobs:
         run: |
           python ai_edit.py
 
-      - name: Create version file if missing
+      - name: Ensure version file exists
         run: |
           if [ ! -f firmware/version.txt ]; then
             echo "firmware/version.txt not found. Creating with 1.0.0"
@@ -121,6 +121,27 @@ jobs:
           echo "VERSION=$NEW" >> $GITHUB_ENV
           echo "New version: $NEW"
 
+      - name: Detect PlatformIO project
+        run: |
+          FOUND=$(find . -maxdepth 4 -name platformio.ini | head -n 1 || true)
+
+          if [ -n "$FOUND" ]; then
+            DIR=$(dirname "$FOUND")
+            echo "Found PlatformIO project at: $DIR"
+            echo "HAVE_PIO=true" >> $GITHUB_ENV
+            echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
+          else
+            echo "No platformio.ini found. Build and release will be skipped."
+            echo "HAVE_PIO=false" >> $GITHUB_ENV
+            echo "PROJECT_DIR=." >> $GITHUB_ENV
+          fi
+
+      - name: Build firmware
+        if: env.HAVE_PIO == 'true'
+        run: |
+          echo "Building PlatformIO project in: $PROJECT_DIR"
+          pio run -d "$PROJECT_DIR"
+
       - name: Commit changes
         run: |
           git config user.name "ai-bot"
@@ -129,15 +150,18 @@ jobs:
           git commit -m "AI update v${VERSION}" || echo "No changes to commit"
           git push
 
-      - name: Build firmware
-        run: |
-          pio run
-
       - name: Create release
+        if: env.HAVE_PIO == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
           name: Release v${{ env.VERSION }}
-          files: .pio/build/*/firmware.bin
+          files: ${{ env.PROJECT_DIR }}/.pio/build/*/firmware.bin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: No build system found
+        if: env.HAVE_PIO != 'true'
+        run: |
+          echo "No PlatformIO project was found, so no binary was built and no GitHub release was created."
+          echo "Your code edit and version bump were still committed."
