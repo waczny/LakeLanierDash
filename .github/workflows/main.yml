@@ -1,0 +1,56 @@
+name: AI Firmware Update
+
+on:
+  repository_dispatch:
+    types:
+      - ai-change
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install openai platformio
+
+      - name: Modify code with AI
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PROMPT: ${{ github.event.client_payload.prompt }}
+        run: |
+          python - <<'PY'
+          import os
+          from openai import OpenAI
+
+          client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+          file_path = "src/main.cpp"
+
+          with open(file_path, "r", encoding="utf-8") as f:
+              code = f.read()
+
+          response = client.chat.completions.create(
+              model="gpt-5-chat",
+              messages=[
+                  {
+                      "role": "system",
+                      "content": "Return ONLY valid full C++ code. No markdown."
+                  },
+                  {
+                      "role": "user",
+                      "content": f"Modify this code:\n\n{code}\n\nChange:\n{os.environ['PROMPT']}"
+                  }
+              ]
+          )
+
