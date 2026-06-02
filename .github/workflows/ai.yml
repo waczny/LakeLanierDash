@@ -39,7 +39,6 @@ jobs:
       - name: Create AI edit script
         run: |
           cat > ai_edit.py <<'PY'
-          import glob
           import os
           import sys
           from openai import OpenAI
@@ -47,24 +46,10 @@ jobs:
           prompt = os.environ["PROMPT"]
           api_key = os.environ["OPENAI_API_KEY"]
 
-          candidates = [
-              "src/main.cpp",
-              "src/main.ino",
-              "main.cpp",
-              "main.ino",
-              "LakeLanierDash.ino",
-              "LakeLanierDash_GITHUB_OTA_CONFIGURED.ino",
-          ]
+          file_path = "LakeLanierDash_GITHUB_OTA_CONFIGURED.ino"
 
-          candidates += sorted(glob.glob("src/*.cpp"))
-          candidates += sorted(glob.glob("src/*.ino"))
-          candidates += sorted(glob.glob("*.cpp"))
-          candidates += sorted(glob.glob("*.ino"))
-
-          file_path = next((p for p in candidates if os.path.isfile(p)), None)
-
-          if not file_path:
-              print("ERROR: Could not find a source file to edit.")
+          if not os.path.isfile(file_path):
+              print(f"ERROR: Could not find source file: {file_path}")
               print("Available files:")
               for root, _, files in os.walk("."):
                   for name in files:
@@ -118,13 +103,21 @@ jobs:
         run: |
           python ai_edit.py
 
+      - name: Create version file if missing
+        run: |
+          if [ ! -f firmware/version.txt ]; then
+            echo "firmware/version.txt not found. Creating with 1.0.0"
+            mkdir -p firmware
+            echo "1.0.0" > firmware/version.txt
+          fi
+
       - name: Bump version
         run: |
-          VERSION=$(cat firmware.txt)
+          VERSION=$(cat firmware/version.txt)
           IFS='.' read -r A B C <<< "$VERSION"
           C=$((C+1))
           NEW="$A.$B.$C"
-          echo "$NEW" > firmware.txt
+          echo "$NEW" > firmware/version.txt
           echo "VERSION=$NEW" >> $GITHUB_ENV
           echo "New version: $NEW"
 
