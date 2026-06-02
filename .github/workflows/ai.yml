@@ -1,8 +1,12 @@
 name: AI Firmware Update
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   repository_dispatch:
-    types: [ai-change]
+    types:
+      - ai-change
 
 jobs:
   run:
@@ -11,71 +15,77 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install openai platformio
+        run: |
+          pip install openai platformio
 
-      # ✅ AI EDIT HERE
       - name: Modify code with AI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PROMPT: ${{ github.event.client_payload.prompt }}
         run: |
-          python <<EOF
-import os
-from openai import OpenAI
+          python - <<'PY'
+          import os
+          from openai import OpenAI
 
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+          client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-file_path = "src/main.cpp"  # 👈 THIS is your main file
+          file_path = "src/main.cpp"
 
-with open(file_path, "r") as f:
-    code = f.read()
+          with open(file_path, "r", encoding="utf-8") as f:
+              code = f.read()
 
-response = client.chat.completions.create(
-    model="gpt-5-chat",
-    messages=[
-        {"role": "system", "content": "Return ONLY valid full C++ code. No markdown."},
-        {"role": "user", "content": f"Modify this code:\n\n{code}\n\nChange:\n{os.environ['PROMPT']}"}
-    ]
-)
+          response = client.chat.completions.create(
+              model="gpt-5-chat",
+              messages=[
+                  {
+                      "role": "system",
+                      "content": "Return ONLY valid full C++ code. No markdown."
+                  },
+                  {
+                      "role": "user",
+                      "content": f"Modify this code:\n\n{code}\n\nChange:\n{os.environ['PROMPT']}"
+                  }
+              ]
+          )
 
-new_code = response.choices[0].message.content
+          new_code = response.choices[0].message.content.strip()
 
-with open(file_path, "w") as f:
-    f.write(new_code)
-EOF
+          with open(file_path, "w", encoding="utf-8") as f:
+              f.write(new_code)
+          PY
 
-      # ✅ VERSION INCREMENT
       - name: Bump version
         run: |
           VERSION=$(cat firmware.txt)
           IFS='.' read -r A B C <<< "$VERSION"
           C=$((C+1))
           NEW="$A.$B.$C"
-          echo $NEW > firmware.txt
+          echo "$NEW" > firmware.txt
           echo "VERSION=$NEW" >> $GITHUB_ENV
 
-      # ✅ COMMIT BACK
       - name: Commit changes
         run: |
           git config user.name "ai-bot"
           git config user.email "bot@github.com"
           git add .
-          git commit -m "AI update $VERSION"
+          git commit -m "AI update $VERSION" || echo "No changes to commit"
           git push
 
-      # ✅ BUILD
-      - run: pio run
+      - name: Build firmware
+        run: |
+          pio run
 
-      # ✅ RELEASE
-      - uses: softprops/action-gh-release@v2
+      - name: Create release
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
           name: Release v${{ env.VERSION }}
