@@ -1,0 +1,84 @@
+name: AI Firmware Update
+
+on:
+  repository_dispatch:
+    types: [ai-change]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install openai platformio
+
+      # ✅ AI EDIT HERE
+      - name: Modify code with AI
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PROMPT: ${{ github.event.client_payload.prompt }}
+        run: |
+          python <<EOF
+import os
+from openai import OpenAI
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+file_path = "src/main.cpp"  # 👈 THIS is your main file
+
+with open(file_path, "r") as f:
+    code = f.read()
+
+response = client.chat.completions.create(
+    model="gpt-5-chat",
+    messages=[
+        {"role": "system", "content": "Return ONLY valid full C++ code. No markdown."},
+        {"role": "user", "content": f"Modify this code:\n\n{code}\n\nChange:\n{os.environ['PROMPT']}"}
+    ]
+)
+
+new_code = response.choices[0].message.content
+
+with open(file_path, "w") as f:
+    f.write(new_code)
+EOF
+
+      # ✅ VERSION INCREMENT
+      - name: Bump version
+        run: |
+          VERSION=$(cat firmware.txt)
+          IFS='.' read -r A B C <<< "$VERSION"
+          C=$((C+1))
+          NEW="$A.$B.$C"
+          echo $NEW > firmware.txt
+          echo "VERSION=$NEW" >> $GITHUB_ENV
+
+      # ✅ COMMIT BACK
+      - name: Commit changes
+        run: |
+          git config user.name "ai-bot"
+          git config user.email "bot@github.com"
+          git add .
+          git commit -m "AI update $VERSION"
+          git push
+
+      # ✅ BUILD
+      - run: pio run
+
+      # ✅ RELEASE
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          files: .pio/build/*/firmware.bin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
