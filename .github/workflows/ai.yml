@@ -18,6 +18,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Show repository files
+        run: |
+          echo "Current folder:"
+          pwd
+          echo ""
+          echo "Files:"
+          find . -maxdepth 4 -type f | sort
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -25,43 +33,91 @@ jobs:
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install openai platformio
 
-      - name: Modify code with AI
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          PROMPT: ${{ github.event.client_payload.prompt }}
+      - name: Create AI edit script
         run: |
-          python - <<'PY'
+          cat > ai_edit.py <<'PY'
+          import glob
           import os
+          import sys
           from openai import OpenAI
 
-          client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+          prompt = os.environ["PROMPT"]
+          api_key = os.environ["OPENAI_API_KEY"]
 
-          file_path = "src/main.cpp"
+          # Common candidates
+          candidates = [
+              "src/main.cpp",
+              "src/main.ino",
+              "main.cpp",
+              "main.ino",
+              "LakeLanierDash.ino",
+          ]
+
+          # Add fallback patterns
+          candidates += sorted(glob.glob("src/*.cpp"))
+          candidates += sorted(glob.glob("src/*.ino"))
+          candidates += sorted(glob.glob("*.cpp"))
+          candidates += sorted(glob.glob("*.ino"))
+
+          file_path = next((p for p in candidates if os.path.isfile(p)), None)
+
+          if not file_path:
+              print("ERROR: Could not find a source file to edit.")
+              print("Available files:")
+              for root, _, files in os.walk("."):
+                  for name in files:
+                      print(os.path.join(root, name))
+              sys.exit(1)
+
+          print(f"Editing file: {file_path}")
 
           with open(file_path, "r", encoding="utf-8") as f:
               code = f.read()
+
+          client = OpenAI(api_key=api_key)
 
           response = client.chat.completions.create(
               model="gpt-5-chat",
               messages=[
                   {
                       "role": "system",
-                      "content": "Return ONLY valid full C++ code. No markdown."
+                      "content": (
+                          "You are editing an ESP32 / Arduino / PlatformIO dashboard project. "
+                          "Keep existing behavior unless the prompt requires a change. "
+                          "Return ONLY the complete updated source file. "
+                          "No markdown. No explanation."
+                      )
                   },
                   {
                       "role": "user",
-                      "content": f"Modify this code:\n\n{code}\n\nChange:\n{os.environ['PROMPT']}"
+                      "content": (
+                          f"Current file path: {file_path}\n\n"
+                          f"Current code:\n{code}\n\n"
+                          f"Requested change:\n{prompt}\n\n"
+                          "Preserve the current structure unless necessary. "
+                          "Output only the complete updated file."
+                      )
                   }
               ]
           )
 
           new_code = response.choices[0].message.content.strip()
 
-          with open(file_path, "w", encoding="utf-8") as f:
+          with open(file_path, "w", encoding="utf-8", newline="\n") as f:
               f.write(new_code)
+
+          print("AI edit complete.")
           PY
+
+      - name: Run AI edit
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PROMPT: ${{ github.event.client_payload.prompt }}
+        run: |
+          python ai_edit.py
 
       - name: Bump version
         run: |
@@ -71,13 +127,14 @@ jobs:
           NEW="$A.$B.$C"
           echo "$NEW" > firmware.txt
           echo "VERSION=$NEW" >> $GITHUB_ENV
+          echo "New version: $NEW"
 
       - name: Commit changes
         run: |
           git config user.name "ai-bot"
           git config user.email "bot@github.com"
           git add .
-          git commit -m "AI update $VERSION" || echo "No changes to commit"
+          git commit -m "AI update v${VERSION}" || echo "No changes to commit"
           git push
 
       - name: Build firmware
