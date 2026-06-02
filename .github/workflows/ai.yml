@@ -47,16 +47,15 @@ jobs:
           prompt = os.environ["PROMPT"]
           api_key = os.environ["OPENAI_API_KEY"]
 
-          # Common candidates
           candidates = [
               "src/main.cpp",
               "src/main.ino",
               "main.cpp",
               "main.ino",
               "LakeLanierDash.ino",
+              "LakeLanierDash_GITHUB_OTA_CONFIGURED.ino",
           ]
 
-          # Add fallback patterns
           candidates += sorted(glob.glob("src/*.cpp"))
           candidates += sorted(glob.glob("src/*.ino"))
           candidates += sorted(glob.glob("*.cpp"))
@@ -80,7 +79,7 @@ jobs:
           client = OpenAI(api_key=api_key)
 
           response = client.chat.completions.create(
-              model="gpt-5-chat",
+              model="gpt-4.1",
               messages=[
                   {
                       "role": "system",
