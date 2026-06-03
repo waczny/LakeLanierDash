@@ -79,7 +79,7 @@ static uint16_t surferBuf[SPR_W * SPR_H];
 
 // ── Timings ──────────────────────────────────────────────────
 const unsigned long REFRESH_MS = 10UL * 60UL * 1000UL;
-const unsigned long SURFER_MS  =  5UL * 60UL * 1000UL;
+const unsigned long SURFER_MS  =  1UL * 60UL * 1000UL;
 
 // ── GitHub OTA update settings ──────────────────────────────
 // Upload this sketch by USB once. Future versions can update over WiFi from GitHub.
