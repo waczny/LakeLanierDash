@@ -1632,7 +1632,7 @@ void checkForOtaUpdate(bool showScreen){
 
   Serial.printf("OTA latest version: %s\n", latest.c_str());
   if(isNewerVersion(latest, FW_VERSION)){
-    otaUpdateAvailable = true;
+    otaUpdateAvailable = false;
     otaLatestVersion = latest;
   } else {
     otaUpdateAvailable = false;
