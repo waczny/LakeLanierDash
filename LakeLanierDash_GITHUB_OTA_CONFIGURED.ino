@@ -87,7 +87,7 @@ const unsigned long SURFER_MS  =  1UL * 60UL * 1000UL;
 //   firmware/version.txt must contain only the latest version, e.g. 1.0.1
 //   Release asset must be named LakeLanierInfoscreen.ino.bin
 //   Change FW_VERSION before compiling each new release.
-#define FW_VERSION       "1.0.5"
+#define FW_VERSION       "1.0.6"
 #define GITHUB_OWNER     "waczny"
 #define GITHUB_REPO      "LakeLanierDash"
 #define FW_BIN_NAME      "LakeLanierInfoscreen.ino.bin"
